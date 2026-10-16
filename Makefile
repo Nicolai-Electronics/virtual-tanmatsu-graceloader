@@ -52,6 +52,10 @@ BUILD_TYPE ?= RelWithDebInfo
 # find its own assets at all.
 INT_DIR ?= int
 SD_DIR  ?= sd
+# What a real card already had and no app repo contains -- the launcher's
+# shared /int/icons pack, mostly. src/main.c copies card/int and card/sd into
+# the two directories above before an app starts, without overwriting.
+CARD_DIR ?= card
 STAGE   := tools/stage-app.py
 STAGED  := $(BUILD_DIR)/staged
 PYTHON  ?= python3
@@ -133,7 +137,7 @@ setup:
 
 %-run: build %-install
 	@echo "=== Running $* ==="; \
-	 $(EMU) --int $(INT_DIR) --sd $(SD_DIR) "$$(cat $(STAGED)/$*.path)"
+	 $(EMU) --int $(INT_DIR) --sd $(SD_DIR) --card $(CARD_DIR) "$$(cat $(STAGED)/$*.path)"
 
 $(foreach name,$(APPS),$(eval $(name): $(name)-run))
 .PHONY: $(APPS)
@@ -192,3 +196,4 @@ help:
 	@echo "  JOBS=<n>                parallel build jobs (default: $(JOBS))"
 	@echo "  INT_DIR=<dir>           host directory the apps see as \"/int\" (default: $(INT_DIR))"
 	@echo "  SD_DIR=<dir>            host directory the apps see as \"/sd\" (default: $(SD_DIR))"
+	@echo "  CARD_DIR=<dir>          card image to seed the virtual card from (default: $(CARD_DIR))"
