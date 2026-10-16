@@ -9,6 +9,7 @@
 #include <stddef.h>
 
 #include "esp_err.h"
+#include "bsp/display.h"
 
 // The Tanmatsu's physical MIPI-DSI panel is a 480x800 *portrait* panel,
 // mounted rotated 90 degrees so apps see an 800x480 *landscape* logical
@@ -24,10 +25,19 @@
 #define BSP_SDL_DEFAULT_HEIGHT 800
 
 // Implemented in bsp_display.c
-esp_err_t bsp_display_internal_create_window(size_t width, size_t height);
+// `requested_color_format` is the app's bsp_display_configuration_t request,
+// passed through unchanged from bsp_device_initialize(); bsp_display.c
+// negotiates it the same way the real ST7701 driver does and the window's
+// texture is created in the resulting format.
+esp_err_t bsp_display_internal_create_window(size_t width, size_t height,
+                                             bsp_display_color_format_t requested_color_format);
 // Implemented in bsp_display.c; used by esp_lcd_shim.c to size the
 // framebuffers it hands out via esp_lcd_dpi_panel_get_frame_buffer().
 void      bsp_display_internal_get_size(size_t* out_width, size_t* out_height);
+// Implemented in bsp_display.c; the bytes per pixel of the *negotiated*
+// display format, which is what both bsp_display_blit() and any framebuffer
+// this emulator allocates on a guest app's behalf have to be sized with.
+size_t    bsp_display_internal_get_bytes_per_pixel(void);
 
 // Implemented in bsp_input.c
 esp_err_t bsp_input_internal_init(void);

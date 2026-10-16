@@ -21,10 +21,51 @@ static bool           s_ready   = false;
 static uint8_t                s_backlight_percentage = 100;
 static bsp_display_te_mode_t  s_te_mode               = BSP_DISPLAY_TE_DISABLED;
 
-esp_err_t bsp_display_internal_create_window(size_t width, size_t height) {
+// The panel's color format is decided once, at BSP init time, from
+// bsp_display_configuration_t.requested_color_format, and what
+// bsp_display_get_parameters() reports afterwards is whatever it actually
+// ended up as. The real Tanmatsu driver makes that a single comparison: the
+// ST7701 runs in 24-bit RGB888 if and only if the app asked for exactly
+// BSP_DISPLAY_COLOR_FORMAT_24_888RGB, and in 16-bit RGB565 for anything else
+// (see badge-bsp's targets/tanmatsu/badge_bsp_display.c setting
+// st7701_configuration_t.use_24_bit_color). Reproducing that here instead of
+// hardcoding one answer is not cosmetic: an app sizes its own framebuffer
+// from what get_parameters() reports, and several apps (pogn, floppybird,
+// paperclips) request 24_888RGB *and* hand-roll raw pixel writes that assume
+// 3 bytes per pixel (main/hershey_font.h's hershey_set_pixel(),
+// main/hershey_font_direct.h's hershey_direct_set_pixel()). Answering those
+// apps with 16_565RGB makes them allocate a 2-byte-per-pixel buffer and then
+// write 1.5x past the end of it -- which is what "the whole UI is jumbled"
+// actually was.
+static bsp_display_color_format_t s_color_format    = BSP_DISPLAY_COLOR_FORMAT_16_565RGB;
+static size_t                     s_bytes_per_pixel = 2;
+
+static void negotiate_color_format(bsp_display_color_format_t requested) {
+    if (requested == BSP_DISPLAY_COLOR_FORMAT_24_888RGB) {
+        s_color_format    = BSP_DISPLAY_COLOR_FORMAT_24_888RGB;
+        s_bytes_per_pixel = 3;
+    } else {
+        s_color_format    = BSP_DISPLAY_COLOR_FORMAT_16_565RGB;
+        s_bytes_per_pixel = 2;
+    }
+}
+
+// The SDL texture format matching a negotiated panel format. PAX's
+// PAX_BUF_24_888RGB stores each pixel little-endian, i.e. as the three bytes
+// B,G,R (pax_index_setter_24bpp()), which is SDL_PIXELFORMAT_BGR24 -- *not*
+// SDL_PIXELFORMAT_RGB24. PAX's PAX_BUF_16_565RGB is RrrrrGggggGBBBBB
+// (pax_col_to_565rgb()), which is exactly SDL_PIXELFORMAT_RGB565.
+static Uint32 texture_format_for(bsp_display_color_format_t format) {
+    return (format == BSP_DISPLAY_COLOR_FORMAT_24_888RGB) ? SDL_PIXELFORMAT_BGR24 : SDL_PIXELFORMAT_RGB565;
+}
+
+esp_err_t bsp_display_internal_create_window(size_t width, size_t height,
+                                             bsp_display_color_format_t requested_color_format) {
     if (s_ready) {
         return ESP_OK;
     }
+
+    negotiate_color_format(requested_color_format);
 
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         ESP_LOGE(TAG, "SDL_Init failed: %s", SDL_GetError());
@@ -50,16 +91,16 @@ esp_err_t bsp_display_internal_create_window(size_t width, size_t height) {
         return ESP_FAIL;
     }
 
-    // RGB565, not ARGB8888: real Tanmatsu hardware (MIPI-DSI panel) is
-    // 16-bit RGB565, and apps request/assume that format explicitly (e.g.
-    // bsp_configuration_t.display.requested_color_format +
-    // bsp_display_get_parameters()) -- some even bypass PAX for hot paths
-    // and poke packed 565 pixels directly (see se_direct565.h/.c in the
-    // synthengine3D-based apps). Reporting a different format back doesn't
-    // just look wrong, it silently mismatches their own buffer's pixel
-    // stride/size against what they compute by hand, corrupting memory.
-    s_texture = SDL_CreateTexture(s_renderer, SDL_PIXELFORMAT_RGB565, SDL_TEXTUREACCESS_STREAMING, (int)width,
-                                  (int)height);
+    // The texture is created in the negotiated format, so a blit needs no
+    // conversion step at all: an app's framebuffer is always in exactly the
+    // format bsp_display_get_parameters() told it to use, which is the same
+    // format the real panel's own framebuffer is in. Apps that bypass PAX for
+    // hot paths and poke packed pixels directly (se_direct565.h/.c in the
+    // synthengine3D-based apps, hershey_font_direct.h in paperclips) depend on
+    // that identity, so whatever format is reported here has to be one they
+    // can be trusted to have built their own buffer in.
+    s_texture = SDL_CreateTexture(s_renderer, texture_format_for(s_color_format), SDL_TEXTUREACCESS_STREAMING,
+                                  (int)width, (int)height);
     if (s_texture == NULL) {
         ESP_LOGE(TAG, "SDL_CreateTexture failed: %s", SDL_GetError());
         return ESP_FAIL;
@@ -87,7 +128,7 @@ esp_err_t bsp_display_get_parameters(size_t* h_res, size_t* v_res, bsp_display_c
         *v_res = s_height;
     }
     if (color_fmt != NULL) {
-        *color_fmt = BSP_DISPLAY_COLOR_FORMAT_16_565RGB;
+        *color_fmt = s_color_format;
     }
     if (data_endian != NULL) {
         *data_endian = BSP_DISPLAY_ENDIAN_LITTLE;
@@ -117,6 +158,10 @@ esp_err_t bsp_display_get_panel(esp_lcd_panel_handle_t* panel) {
 void bsp_display_internal_get_size(size_t* out_width, size_t* out_height) {
     *out_width  = s_width;
     *out_height = s_height;
+}
+
+size_t bsp_display_internal_get_bytes_per_pixel(void) {
+    return s_bytes_per_pixel;
 }
 
 esp_err_t bsp_display_get_panel_io(esp_lcd_panel_io_handle_t* io) {
@@ -227,7 +272,7 @@ esp_err_t bsp_display_blit(size_t x, size_t y, size_t width, size_t height, cons
     }
 
     SDL_Rect rect = {(int)x, (int)y, (int)width, (int)height};
-    if (SDL_UpdateTexture(s_texture, &rect, buffer, (int)(width * 2)) != 0) {
+    if (SDL_UpdateTexture(s_texture, &rect, buffer, (int)(width * s_bytes_per_pixel)) != 0) {
         ESP_LOGE(TAG, "SDL_UpdateTexture failed: %s", SDL_GetError());
         return ESP_FAIL;
     }

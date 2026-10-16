@@ -12,13 +12,18 @@ static char const TAG[] = "bsp_device";
 static bool s_initialized = false;
 
 esp_err_t bsp_device_initialize(const bsp_configuration_t* configuration) {
-    (void)configuration;
-
     if (s_initialized) {
         return ESP_OK;
     }
 
-    esp_err_t err = bsp_display_internal_create_window(BSP_SDL_DEFAULT_WIDTH, BSP_SDL_DEFAULT_HEIGHT);
+    // The display configuration is not ignored here: the requested color
+    // format decides the panel format the whole app then builds its
+    // framebuffer around (see negotiate_color_format() in bsp_display.c).
+    bsp_display_color_format_t requested_color_format =
+        configuration ? configuration->display.requested_color_format : BSP_DISPLAY_COLOR_FORMAT_16_565RGB;
+
+    esp_err_t err = bsp_display_internal_create_window(BSP_SDL_DEFAULT_WIDTH, BSP_SDL_DEFAULT_HEIGHT,
+                                                       requested_color_format);
     if (err != ESP_OK) {
         return err;
     }
