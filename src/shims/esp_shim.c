@@ -8,6 +8,7 @@
 #include "esp_err.h"
 #include "esp_heap_caps.h"
 #include "esp_timer.h"
+#include "guest_varargs.h"
 #include "guest_mem.h"
 #include "trap.h"
 
@@ -33,11 +34,20 @@ void trap_esp_err_to_name(cpu_t *cpu) {
 }
 
 void trap_esp_log(cpu_t *cpu) {
-    // Real signature is variadic (esp_log_write-style); apps generally only
-    // reach this through the ESP_LOGx() macros which this emulator doesn't
-    // intercept, so a plain passthrough is enough to avoid a crash if an app
-    // calls it directly with no format arguments.
-    (void)cpu;
+    // ESP-IDF v6: esp_log(esp_log_config_t config, char const *tag, char const
+    // *format, ...). The ESP_LOGx() macros all expand straight into this
+    // function, so every app log line lands here; the macro's own format
+    // prefix already carries the level/timestamp/tag, so only the format
+    // string and its varargs need formatting.
+    char const *fmt = (char const *)arg_ptr(cpu, 2);
+    if (fmt == NULL) {
+        return;
+    }
+    guest_va_t va;
+    guest_va_init_call(&va, cpu, 3);
+    guest_vfprintf(&va, stdout, fmt);
+    fputc('\n', stdout);
+    fflush(stdout);
 }
 
 void trap_esp_log_timestamp(cpu_t *cpu) {

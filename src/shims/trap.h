@@ -54,7 +54,10 @@ static inline void ret_f32(cpu_t *cpu, float v) {
 
 // Reads a 64-bit integer argument: like doubles (see arg_f64 below), the
 // RV32 integer calling convention passes a 64-bit scalar in a pair of
-// consecutive registers (lo, hi), with no even/odd alignment requirement.
+// consecutive registers (lo, hi) -- for *named* arguments only, which GCC
+// packs densely with no even/odd alignment requirement. Variadic 64-bit
+// arguments do have to start at an even register index; anything reading a
+// format string's varargs must use guest_varargs.h instead of these helpers.
 // `i` is the index of the low register, e.g. 0 for the first argument
 // (a0:a1), 2 for the second (a2:a3) if the first argument was also 64-bit.
 static inline uint64_t arg_u64(cpu_t *cpu, int i) {

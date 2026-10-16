@@ -145,6 +145,7 @@ add_library(emu_shims STATIC
     src/shims/handle_table.c
     src/shims/fsroot.c
     src/shims/libc_shim.c
+    src/shims/guest_varargs.c
     src/shims/softfloat_shim.c
     src/shims/math_shim.c
     src/shims/esp_shim.c

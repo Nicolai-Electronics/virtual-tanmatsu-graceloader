@@ -17,6 +17,7 @@
 #include "fsroot.h"
 #include "freertos/FreeRTOS.h"
 #include "guest_mem.h"
+#include "guest_varargs.h"
 #include "handle_table.h"
 #include "trap.h"
 
@@ -101,30 +102,25 @@ void trap_snprintf(cpu_t *cpu) {
     char       *buf  = (char *)arg_ptr(cpu, 0);
     size_t      size = arg_u32(cpu, 1);
     char const *fmt  = (char const *)arg_ptr(cpu, 2);
-    // Apps only use plain %s/%d/%u/%x/%f-style snprintf, all of which take
-    // plain scalar varargs that the guest already laid out in a0-a7 in
-    // calling-convention order; forwarding the remaining argument registers
-    // as a `long` vararg list matches that layout on x86-64 for the formats
-    // these apps use.
-    ret_u32(
-        cpu, (uint32_t)snprintf(
-                 buf, size, fmt, (long)arg_u32(cpu, 3), (long)arg_u32(cpu, 4), (long)arg_u32(cpu, 5),
-                 (long)arg_u32(cpu, 6), (long)arg_u32(cpu, 7)
-             )
-    );
+    // The varargs start in a3 (buf/size/fmt are snprintf()'s three named
+    // arguments) and follow the guest's own layout rules -- see
+    // guest_varargs.h. Handing a0-a7 straight to the host snprintf() instead,
+    // as this used to, shifts every argument after the first 64-bit one by a
+    // register: snprintf(buf, 48, "score=%lld", (long long)20) read a3 (a
+    // stale leftover of the caller's own argument list) as the low half and
+    // a4 (the real value) as the high half, and printed 8589934612.
+    guest_va_t va;
+    guest_va_init_call(&va, cpu, 3);
+    ret_u32(cpu, (uint32_t)guest_vsnprintf(&va, buf, size, fmt));
 }
 
 void trap_printf(cpu_t *cpu) {
     char const *fmt = (char const *)arg_ptr(cpu, 0);
-    // See trap_snprintf()'s comment on why forwarding a0-a7 as `long`
-    // varargs matches the guest's layout for the plain scalar formats these
-    // apps use.
-    ret_u32(
-        cpu, (uint32_t)printf(
-                 fmt, (long)arg_u32(cpu, 1), (long)arg_u32(cpu, 2), (long)arg_u32(cpu, 3), (long)arg_u32(cpu, 4),
-                 (long)arg_u32(cpu, 5), (long)arg_u32(cpu, 6)
-             )
-    );
+    // See trap_snprintf()'s comment; printf()'s one named argument is the
+    // format string, so its varargs start in a1.
+    guest_va_t va;
+    guest_va_init_call(&va, cpu, 1);
+    ret_u32(cpu, (uint32_t)guest_vfprintf(&va, stdout, fmt));
 }
 void trap_putchar(cpu_t *cpu) {
     ret_u32(cpu, (uint32_t)putchar(arg_i32(cpu, 0)));
@@ -376,50 +372,39 @@ void trap_rmdir(cpu_t *cpu) {
 void trap_fprintf(cpu_t *cpu) {
     FILE       *f   = handle_get(arg_u32(cpu, 0));
     char const *fmt = (char const *)arg_ptr(cpu, 1);
-    // See trap_snprintf()'s comment on why forwarding a0-a7 as `long`
-    // varargs matches the guest's layout for the plain scalar formats these
-    // apps use.
-    ret_u32(
-        cpu, (uint32_t)(f ? fprintf(
-                                f, fmt, (long)arg_u32(cpu, 2), (long)arg_u32(cpu, 3), (long)arg_u32(cpu, 4),
-                                (long)arg_u32(cpu, 5), (long)arg_u32(cpu, 6)
-                            )
-                          : 0)
-    );
+    // See trap_snprintf()'s comment; fprintf()'s two named arguments are the
+    // stream and the format string, so its varargs start in a2.
+    if (f == NULL) {
+        ret_u32(cpu, (uint32_t)-1);
+        return;
+    }
+    guest_va_t va;
+    guest_va_init_call(&va, cpu, 2);
+    ret_u32(cpu, (uint32_t)guest_vfprintf(&va, f, fmt));
 }
 void trap_vsnprintf(cpu_t *cpu) {
-    // Unlike trap_snprintf()/trap_fprintf() (which read the *caller's* a0-a7
+    // Unlike trap_snprintf()/trap_fprintf() (which read the *caller's* argument
     // registers directly, since those are genuine varargs calls), this is
-    // vsnprintf(): the guest already called va_start() and is handing us its
-    // va_list as an explicit 4th argument. On RV32, unlike x86-64's
-    // multi-field va_list, that's just a plain pointer into a contiguous
-    // sequence of 4-byte argument slots (every GCC/Clang RISC-V target
-    // spills its unnamed/variadic arguments to memory at the varargs
-    // function's entry) -- so it can be read directly here, as guest memory
-    // (identity-mapped, see guest_mem.h). An earlier version of this
-    // function ignored that pointer entirely and called snprintf(buf, size,
-    // fmt) with zero arguments, which is undefined behaviour (reads
-    // whatever garbage is on the host's own stack) for any format string
-    // with a real conversion in it -- see the crash this caused in
-    // main/common/trace.c's trace()/dbg_log() in tanmatsu-synthminer-grace.
+    // vsnprintf(): the guest already called va_start() and hands its va_list
+    // over as the 4th argument, in a3 (a va_list is 4 bytes on riscv32, so it
+    // travels in a register like any other 4-byte scalar).
     //
-    // Doesn't handle %f/%lf: a variadic double consumes two 4-byte slots on
-    // RV32 (promoted/passed through the integer argument sequence, not
-    // fa0-fa7), not one -- no caller in this emulator's app set has hit
-    // that yet. Matches trap_snprintf()/trap_fprintf()'s own approximation.
-    char            *buf  = (char *)arg_ptr(cpu, 0);
-    size_t           size = arg_u32(cpu, 1);
-    char const      *fmt  = (char const *)arg_ptr(cpu, 2);
-    uint32_t const  *args = (uint32_t const *)arg_ptr(cpu, 3);
-    uint32_t a0 = 0, a1 = 0, a2 = 0, a3 = 0, a4 = 0;
-    if (args != NULL) {
-        a0 = args[0];
-        a1 = args[1];
-        a2 = args[2];
-        a3 = args[3];
-        a4 = args[4];
-    }
-    ret_u32(cpu, (uint32_t)snprintf(buf, size, fmt, (long)a0, (long)a1, (long)a2, (long)a3, (long)a4));
+    // That value is a plain slot pointer into the callee's register-save area,
+    // which GCC places immediately before the stack-argument area so that one
+    // pointer can walk both -- see rule 5 in guest_varargs.h. Reading it as
+    // guest memory (identity-mapped, see guest_mem.h) is therefore exact. An
+    // earlier version of this function ignored the pointer entirely and called
+    // snprintf(buf, size, fmt) with zero arguments, which is undefined
+    // behaviour (it reads whatever garbage is on the host's own stack) for any
+    // format string with a real conversion in it -- see the crash this caused
+    // in main/common/trace.c's trace()/dbg_log() in tanmatsu-synthminer-grace.
+    char       *buf  = (char *)arg_ptr(cpu, 0);
+    size_t      size = arg_u32(cpu, 1);
+    char const *fmt  = (char const *)arg_ptr(cpu, 2);
+    uint32_t    ap   = arg_u32(cpu, 3);
+    guest_va_t  va;
+    guest_va_init_va_list(&va, cpu, ap);
+    ret_u32(cpu, (uint32_t)guest_vsnprintf(&va, buf, size, fmt));
 }
 void trap_sscanf(cpu_t *cpu) {
     char const *str = (char const *)arg_ptr(cpu, 0);
