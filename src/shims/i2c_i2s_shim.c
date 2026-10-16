@@ -51,7 +51,7 @@ void trap_i2s_channel_disable(cpu_t *cpu) {
 void trap_i2s_channel_write(cpu_t *cpu) {
     // arg 4 (timeout_ms) ignored: every caller in this emulator's app set
     // passes portMAX_DELAY, and bsp_audio_internal_channel_write() always
-    // blocks (via real backpressure against the SDL audio queue) rather
+    // blocks (against its I2S stream clock, see src/bsp/bsp_audio.c) rather
     // than returning early, which is what that argument is asking for.
     void const *src           = arg_ptr(cpu, 1);
     size_t      size          = arg_u32(cpu, 2);
