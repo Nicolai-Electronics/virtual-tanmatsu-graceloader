@@ -1,0 +1,5 @@
+repository: git://github.com/robotman2412/pax-codecs.git
+repository_info:
+  commit_sha: b2e24d616ea064df7572bb9af9d046b26b2122d9
+  path: .
+version: 1.0.1
