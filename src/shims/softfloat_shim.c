@@ -33,6 +33,9 @@ void trap___gtdf2(cpu_t *cpu) {
 void trap___floatsidf(cpu_t *cpu) {
     ret_f64(cpu, (double)arg_i32(cpu, 0));
 }
+void trap___floatundidf(cpu_t *cpu) {
+    ret_f64(cpu, (double)arg_u64(cpu, 0));
+}
 void trap___floatdisf(cpu_t *cpu) {
     ret_f32(cpu, (float)arg_i64(cpu, 0));
 }
@@ -96,4 +99,12 @@ void trap___moddi3(cpu_t *cpu) {
 }
 void trap___udivdi3(cpu_t *cpu) {
     ret_u64(cpu, arg_u64(cpu, 0) / arg_u64(cpu, 2));
+}
+
+void trap___unorddf2(cpu_t *cpu) {
+    // libgcc convention: 1 when the comparison is unordered (either side is a
+    // NaN), 0 otherwise. Unlike the __*df2 comparators above, this one is a
+    // plain boolean, not a three-way result.
+    double a = arg_f64(cpu, 0), b = arg_f64(cpu, 2);
+    ret_u32(cpu, (isnan(a) || isnan(b)) ? 1u : 0u);
 }

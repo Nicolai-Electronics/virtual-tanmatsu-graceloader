@@ -5,8 +5,10 @@
 
 #include <errno.h>
 #include <pthread.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -49,6 +51,11 @@ void trap_strcmp(cpu_t *cpu) {
 }
 void trap_strncmp(cpu_t *cpu) {
     ret_u32(cpu, (uint32_t)(int32_t)strncmp((char *)arg_ptr(cpu, 0), (char *)arg_ptr(cpu, 1), arg_u32(cpu, 2)));
+}
+void trap_strncpy(cpu_t *cpu) {
+    // strncpy()'s pad-with-NULs and no-guaranteed-terminator behaviour is
+    // exactly the host's; apps use it to fill fixed-size record fields.
+    ret_ptr(cpu, strncpy((char *)arg_ptr(cpu, 0), (char const *)arg_ptr(cpu, 1), arg_u32(cpu, 2)));
 }
 void trap_strcpy(cpu_t *cpu) {
     ret_ptr(cpu, strcpy((char *)arg_ptr(cpu, 0), (char *)arg_ptr(cpu, 1)));
@@ -225,8 +232,36 @@ void trap_mkdir(cpu_t *cpu) {
 
 void trap_time(cpu_t *cpu) {
     time_t *tloc = (time_t *)arg_ptr(cpu, 0);
-    ret_u32(cpu, (uint32_t)time(tloc));
+    // time_t is 64-bit in the guest's picolibc (_TIME_T_ is __int_least64_t),
+    // so time() returns it in the a0:a1 pair like any other 64-bit scalar.
+    // Returning only the low half leaves the caller's high half holding
+    // whatever stale value a1 already had.
+    ret_u64(cpu, (uint64_t)(int64_t)time(tloc));
 }
+void trap_difftime(cpu_t *cpu) {
+    // difftime(time_t end, time_t start): two 64-bit named arguments, hence
+    // a0:a1 and a2:a3; the double return uses the soft-call pair.
+    ret_f64(cpu, difftime((time_t)arg_i64(cpu, 0), (time_t)arg_i64(cpu, 2)));
+}
+
+// The guest's PRNG is the host's: nothing here needs cryptographic quality,
+// but a game that drew the same "random" layout every run would look broken,
+// so seed once from the clock rather than leaving rand() on its fixed default
+// seed (which is what the guest's own libc would do, since no app imports
+// srand()). Shared with trap_esp_random() (see esp_shim.c); declared in
+// trap.h.
+void seed_host_rand(void) {
+    static bool seeded = false;
+    if (!seeded) {
+        seeded = true;
+        srand((unsigned)time(NULL) ^ (unsigned)getpid());
+    }
+}
+void trap_rand(cpu_t *cpu) {
+    seed_host_rand();
+    ret_u32(cpu, (uint32_t)rand());
+}
+
 void trap_usleep(cpu_t *cpu) {
     // Like trap_vTaskDelay() in freertos_shim.c: never really block the host
     // thread (that would stall this task's cpu_t and, if it's the main
@@ -337,6 +372,22 @@ void trap_strstr(cpu_t *cpu) {
 void trap_strcspn(cpu_t *cpu) {
     ret_u32(cpu, (uint32_t)strcspn((char const *)arg_ptr(cpu, 0), (char const *)arg_ptr(cpu, 1)));
 }
+void trap_strlcat(cpu_t *cpu) {
+    // BSD strlcat, same story as trap_strlcpy() below: not in every libc this
+    // emulator is built against, so implement it directly rather than depend
+    // on the host version. It returns the length it tried to create -- the
+    // original length of dst plus strlen(src) -- not the length it wrote.
+    char       *dst  = (char *)arg_ptr(cpu, 0);
+    char const *src  = (char const *)arg_ptr(cpu, 1);
+    size_t      size = arg_u32(cpu, 2);
+    size_t      dlen = strnlen(dst, size);
+    if (dlen >= size) {
+        ret_u32(cpu, (uint32_t)(size + strlen(src)));  // dst wasn't terminated within size bytes
+        return;
+    }
+    strncat(dst, src, size - dlen - 1);
+    ret_u32(cpu, (uint32_t)(dlen + strlen(src)));
+}
 void trap_strncat(cpu_t *cpu) {
     ret_ptr(cpu, strncat((char *)arg_ptr(cpu, 0), (char const *)arg_ptr(cpu, 1), arg_u32(cpu, 2)));
 }
@@ -358,6 +409,11 @@ void trap_strlcpy(cpu_t *cpu) {
 void trap_fflush(cpu_t *cpu) {
     FILE *f = handle_get(arg_u32(cpu, 0));
     ret_u32(cpu, (uint32_t)fflush(f));
+}
+void trap_fputc(cpu_t *cpu) {
+    // fputc(int c, FILE *stream): the character in a0, the handle in a1.
+    FILE *f = handle_get(arg_u32(cpu, 1));
+    ret_u32(cpu, (uint32_t)(f ? fputc(arg_i32(cpu, 0), f) : -1));
 }
 void trap_ftell(cpu_t *cpu) {
     FILE *f = handle_get(arg_u32(cpu, 0));
@@ -381,6 +437,17 @@ void trap_fprintf(cpu_t *cpu) {
     guest_va_t va;
     guest_va_init_call(&va, cpu, 2);
     ret_u32(cpu, (uint32_t)guest_vfprintf(&va, f, fmt));
+}
+void trap_sprintf(cpu_t *cpu) {
+    // sprintf() is snprintf() with no bound. The varargs start in a2 (buf and
+    // fmt are its two named arguments) -- see trap_snprintf()'s comment.
+    // SIZE_MAX rather than a real size because there is no size to honour:
+    // overflowing the caller's buffer is sprintf()'s own footgun, not ours.
+    char       *buf = (char *)arg_ptr(cpu, 0);
+    char const *fmt = (char const *)arg_ptr(cpu, 1);
+    guest_va_t  va;
+    guest_va_init_call(&va, cpu, 2);
+    ret_u32(cpu, (uint32_t)guest_vsnprintf(&va, buf, SIZE_MAX, fmt));
 }
 void trap_vsnprintf(cpu_t *cpu) {
     // Unlike trap_snprintf()/trap_fprintf() (which read the *caller's* argument

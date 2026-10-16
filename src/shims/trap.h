@@ -51,7 +51,6 @@ static inline void ret_ptr(cpu_t *cpu, void *p) {
 static inline void ret_f32(cpu_t *cpu, float v) {
     cpu->f[10] = v;
 }
-
 // Reads a 64-bit integer argument: like doubles (see arg_f64 below), the
 // RV32 integer calling convention passes a 64-bit scalar in a pair of
 // consecutive registers (lo, hi) -- for *named* arguments only, which GCC
@@ -82,3 +81,7 @@ static inline void ret_f64(cpu_t *cpu, double v) {
     cpu->x[10] = (uint32_t)bits;
     cpu->x[11] = (uint32_t)(bits >> 32);
 }
+
+// Seed for the host C library's PRNG, used by the guest's rand() and
+// esp_random() (see seed_host_rand() in libc_shim.c).
+void seed_host_rand(void);

@@ -133,6 +133,14 @@ void trap_heap_caps_get_info(cpu_t *cpu) {
 void trap_esp_clk_cpu_freq(cpu_t *cpu) {
     ret_u32(cpu, 400 * 1000 * 1000);  // ESP32-P4's default CPU clock
 }
+void trap_esp_random(cpu_t *cpu) {
+    // esp_random() reads the hardware RNG on-device. Off-device the host C
+    // library's PRNG is the closest equivalent; nothing here needs
+    // cryptographic quality (apps use it for gameplay variance). Two rand()
+    // calls because rand() only yields 31 usable bits.
+    seed_host_rand();
+    ret_u32(cpu, ((uint32_t)rand() << 15) ^ (uint32_t)rand());
+}
 void trap_esp_log_level_set(cpu_t *cpu) {
     (void)cpu;
 }

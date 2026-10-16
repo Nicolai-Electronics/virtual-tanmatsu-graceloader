@@ -61,3 +61,13 @@ void trap_usb_serial_jtag_wait_tx_done(cpu_t *cpu) {
     (void)cpu;
     ret_u32(cpu, ESP_OK);
 }
+
+// GPIO: this backend has no GPIOs at all (input arrives through SDL/bsp_input
+// instead), but several apps' component init paths call gpio_install_isr_service()
+// unconditionally and some of them ESP_ERROR_CHECK() the result. Succeeding is
+// the graceful answer: the service "exists", so any handler they go on to add
+// simply never fires, rather than the app aborting on the way to the menu.
+void trap_gpio_install_isr_service(cpu_t *cpu) {
+    (void)cpu;  // arg 0 is intr_alloc_flags, nothing here allocates an interrupt
+    ret_u32(cpu, ESP_OK);
+}

@@ -72,9 +72,18 @@ void trap_fmod(cpu_t *cpu) {
 void trap_log(cpu_t *cpu) {
     ret_f64(cpu, log(arg_f64(cpu, 0)));
 }
+void trap_log10(cpu_t *cpu) {
+    ret_f64(cpu, log10(arg_f64(cpu, 0)));
+}
 void trap_exp2(cpu_t *cpu) {
     ret_f64(cpu, exp2(arg_f64(cpu, 0)));
 }
 void trap_atan2(cpu_t *cpu) {
     ret_f64(cpu, atan2(arg_f64(cpu, 0), arg_f64(cpu, 2)));
+}
+void trap_pow(cpu_t *cpu) {
+    ret_f64(cpu, pow(arg_f64(cpu, 0), arg_f64(cpu, 2)));
+}
+void trap_round(cpu_t *cpu) {
+    ret_f64(cpu, round(arg_f64(cpu, 0)));
 }
