@@ -313,30 +313,13 @@ void trap_calloc(cpu_t *cpu) {
     ret_ptr(cpu, guest_mem_calloc((size_t)arg_u32(cpu, 0) * arg_u32(cpu, 1), 8));
 }
 void trap_free(cpu_t *cpu) {
-    // Guest memory is a bump allocator for the process lifetime; nothing to
-    // free.
-    (void)cpu;
+    guest_mem_free(arg_ptr(cpu, 0));
 }
 void trap_malloc(cpu_t *cpu) {
     ret_ptr(cpu, guest_mem_calloc(arg_u32(cpu, 0), 8));
 }
 void trap_realloc(cpu_t *cpu) {
-    // Same bump-allocator rationale as trap_heap_caps_realloc() in
-    // esp_shim.c: always "moves" (fresh alloc + copy forward), which is
-    // correct as long as nothing still holds the old pointer afterwards --
-    // and only copies up to the new size, since the old allocation's size
-    // isn't tracked and over-copying past it would be the unsafe direction.
-    void  *old_ptr  = arg_ptr(cpu, 0);
-    size_t new_size = arg_u32(cpu, 1);
-    if (new_size == 0) {
-        ret_ptr(cpu, NULL);
-        return;
-    }
-    void *new_ptr = guest_mem_calloc(new_size, 8);
-    if (old_ptr != NULL) {
-        memcpy(new_ptr, old_ptr, new_size);
-    }
-    ret_ptr(cpu, new_ptr);
+    ret_ptr(cpu, guest_mem_realloc(arg_ptr(cpu, 0), arg_u32(cpu, 1)));
 }
 
 void trap_atoi(cpu_t *cpu) {

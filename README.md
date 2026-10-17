@@ -14,9 +14,9 @@ and this emulator loads and runs exactly that file.
 ## How it works
 
 **Loading is the real thing.** `src/main.c` links against the same `kbelf`
-loader the on-device graceloader uses (taken from `../tanmatsu-graceloader/lib`,
-see `make setup` below), so `app.so` is relocated, init-constructed and entered
-the way the device does it.
+loader the on-device graceloader uses (`lib/kbelf`, its own git submodule),
+so `app.so` is relocated, init-constructed and entered the way the device
+does it.
 
 **Execution is a from-scratch RV32IMAFC interpreter** (`src/riscv/cpu.c`) — no
 JIT, no translation to x86. Fast enough for these apps, not fast enough to be a
@@ -70,9 +70,7 @@ Makefile looks for it in `$IDF_TOOLS_PATH`, then `~/.espressif`, `~/idf` and
 Relative paths throughout, so a side-by-side checkout works for anyone:
 
 ```
-tanmatsu-graceloader/             the on-device loader; supplies lib/kbelf
-lib -> tanmatsu-graceloader/lib  created by `make setup`
-virtual-tanmatsu-graceloader/     this emulator
+virtual-tanmatsu-graceloader/     this emulator (lib/kbelf is its own submodule)
 tanmatsu-ballz-grace/             the apps, one repo each
 tanmatsu-synthracer-grace/
 ...
@@ -81,9 +79,9 @@ tanmatsu-synthracer-grace/
 ## Build and run
 
 ```
-make setup          # create ../lib -> ../tanmatsu-graceloader/lib
-make build          # configure (first time) and build build/graceloader-emulator
-make ballz          # build Ballz, install it to the virtual card, run it
+git submodule update --init  # fetch lib/kbelf, first time only
+make build                   # configure (first time) and build build/graceloader-emulator
+make ballz                   # build Ballz, install it to the virtual card, run it
 ```
 
 `make <name>` does all three for any of `synthminer synthracer portals showreel
@@ -170,3 +168,24 @@ window.
 - **`ESP_ERROR_CHECK` failures abort** the way they do on the device, with the
   failing expression and source line, which is usually the fastest clue about a
   missing or half-implemented API.
+
+## License
+
+This emulator's own code is MIT-licensed (see `LICENSE`). The libraries it links
+into `graceloader-emulator` are each under their own license, listed below — all
+permissive (MIT/BSD/zlib), so none of them constrain this choice. `lib/kbelf` and
+`components/pax-*` are compiled from source alongside the emulator (see
+`CMakeLists.txt`); SDL2 and zlib are the host's own (multilib) system packages,
+linked but not vendored.
+
+| Library | Role here | License | Source |
+| --- | --- | --- | --- |
+| [kbelf](https://github.com/nullislandspace/KiloElfLoader) | ELF loader/relocator that loads `app.so` | MIT | `lib/kbelf` (its own submodule, `graceloader` branch) |
+| [pax-gfx](https://github.com/robotman2412/pax-graphics) | 2D graphics library apps draw with | MIT | `components/pax-gfx` |
+| [pax-codecs](https://github.com/robotman2412/pax-codecs) | PNG decode wrapper around pax-gfx | MIT | `components/pax-codecs` |
+| [libspng](https://libspng.org/) | PNG decoder, used by pax-codecs | BSD-2-Clause | `components/pax-codecs/libspng` |
+| [SDL2](https://www.libsdl.org/) | Window, framebuffer blit, keyboard input, queued audio output | zlib License | system package (`libsdl2-dev:i386`) |
+| [zlib](https://zlib.net/) | DEFLATE decompression, used by libspng | zlib License | system package (`zlib1g-dev:i386`) |
+
+All are permissive (MIT/BSD/zlib): no copyleft obligations, attribution is the
+only requirement, which is what this section is for.

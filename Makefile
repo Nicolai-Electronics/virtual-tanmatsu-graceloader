@@ -3,9 +3,7 @@
 # Every path below is relative, so a plain side-by-side checkout works for
 # anyone. Layout assumed:
 #
-#   ../tanmatsu-graceloader/      the on-device graceloader; supplies lib/kbelf
-#   ../lib                        -> tanmatsu-graceloader/lib  (`make setup`)
-#   ./                            this emulator
+#   ./                            this emulator (lib/kbelf is its own submodule)
 #   ../tanmatsu-<name>-grace/     the apps
 #
 # Host packages for the emulator. It is built -m32 because app.so is ILP32 and
@@ -60,10 +58,6 @@ STAGE   := tools/stage-app.py
 STAGED  := $(BUILD_DIR)/staged
 PYTHON  ?= python3
 
-# CMakeLists.txt reads its kbelf sources from ../lib/kbelf.
-GRACELOADER_DIR ?= ../tanmatsu-graceloader
-KBELF_LINK      := ../lib
-
 # Toolchain location for the app builds; empty leaves it to the apps' own
 # Makefiles (which fall back to ./esp-idf-tools or $PATH).
 IDF_TOOLS_PATH ?= $(shell \
@@ -77,7 +71,7 @@ ifneq ($(IDF_TOOLS_PATH),)
 APP_MAKE_VARS := IDF_TOOLS_PATH=$(IDF_TOOLS_PATH)
 endif
 
-.PHONY: all build configure clean run apps apps-clean setup help
+.PHONY: all build configure clean run apps apps-clean help
 .PHONY: %-build %-install %-run
 
 all: build
@@ -90,25 +84,14 @@ build: configure
 configure: $(BUILD_DIR)/CMakeCache.txt
 
 $(BUILD_DIR)/CMakeCache.txt: CMakeLists.txt
-	@if [ ! -d "$(KBELF_LINK)/kbelf" ]; then \
-	  echo "error: $(KBELF_LINK)/kbelf is missing, and CMakeLists.txt takes its"; \
-	  echo "       kbelf sources from there. Run 'make setup' first."; exit 1; fi
+	@if [ ! -d "lib/kbelf/src" ]; then \
+	  echo "error: lib/kbelf is empty. It's a submodule; run:"; \
+	  echo "       git submodule update --init"; exit 1; fi
 	mkdir -p $(BUILD_DIR)
 	$(CMAKE) -S . -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE)
 
 clean:
 	rm -rf $(BUILD_DIR)
-
-setup:
-	@if [ -e "$(KBELF_LINK)" ]; then \
-	  echo "$(KBELF_LINK) already exists, nothing to do"; \
-	elif [ -d "$(GRACELOADER_DIR)/lib" ]; then \
-	  ln -s "$(notdir $(GRACELOADER_DIR))/lib" "$(KBELF_LINK)" && \
-	  echo "linked $(KBELF_LINK) -> $(notdir $(GRACELOADER_DIR))/lib"; \
-	else \
-	  echo "error: no $(GRACELOADER_DIR)/lib to link $(KBELF_LINK) to."; \
-	  echo "       Put a tanmatsu-graceloader checkout next to this emulator, or"; \
-	  echo "       point $(KBELF_LINK) at that checkout's lib/ directory yourself."; exit 1; fi
 
 # ------------------------------------------------------------------------ apps
 
@@ -175,7 +158,6 @@ help:
 	@echo "  make build         configure (if needed) and build $(EMU)"
 	@echo "  make configure     re-run the CMake configure step only"
 	@echo "  make clean         remove $(BUILD_DIR)"
-	@echo "  make setup         create $(KBELF_LINK) -> $(GRACELOADER_DIR)/lib"
 	@echo "  make run           build and run $(APP) (change it with APP=<name>)"
 	@echo
 	@echo "Apps ($(APPS)):"

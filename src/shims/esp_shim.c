@@ -77,9 +77,7 @@ void trap_heap_caps_aligned_alloc(cpu_t *cpu) {
     ret_ptr(cpu, guest_mem_calloc(size, align));
 }
 void trap_heap_caps_free(cpu_t *cpu) {
-    // Guest memory is a bump allocator for the process lifetime; nothing to
-    // free (mirrors kbelfx_seg_free()).
-    (void)cpu;
+    guest_mem_free(arg_ptr(cpu, 0));
 }
 void trap_heap_caps_get_free_size(cpu_t *cpu) {
     // No per-capability accounting on the host; report a generous constant
@@ -101,25 +99,7 @@ void trap_heap_caps_aligned_calloc(cpu_t *cpu) {
     ret_ptr(cpu, guest_mem_calloc(n * size, align));
 }
 void trap_heap_caps_realloc(cpu_t *cpu) {
-    // Guest memory is a bump allocator: there's no in-place growth, so this
-    // always "moves" -- allocate fresh and copy forward. Correct as long as
-    // nothing still holds the old pointer after a realloc, same as real
-    // realloc()'s contract.
-    void  *old_ptr  = arg_ptr(cpu, 0);
-    size_t new_size = arg_u32(cpu, 1);
-    if (new_size == 0) {
-        ret_ptr(cpu, NULL);
-        return;
-    }
-    void *new_ptr = guest_mem_calloc(new_size, 8);
-    if (old_ptr != NULL) {
-        // We don't track the old allocation's size; over-copying past it
-        // would read adjacent (valid, if unrelated) guest memory, so copy
-        // only up to the new size, which is always safe for a grow-or-same
-        // realloc and is the common case here.
-        memcpy(new_ptr, old_ptr, new_size);
-    }
-    ret_ptr(cpu, new_ptr);
+    ret_ptr(cpu, guest_mem_realloc(arg_ptr(cpu, 0), arg_u32(cpu, 1)));
 }
 void trap_heap_caps_get_info(cpu_t *cpu) {
     multi_heap_info_t *info = (multi_heap_info_t *)arg_ptr(cpu, 0);

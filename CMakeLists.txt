@@ -41,7 +41,7 @@ find_package(SDL2 REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(Threads REQUIRED)
 
-set(KBELF_DIR ${CMAKE_CURRENT_LIST_DIR}/../lib/kbelf)
+set(KBELF_DIR ${CMAKE_CURRENT_LIST_DIR}/lib/kbelf)
 
 # Headers are shared freely across all of this project's own targets (loader,
 # interpreter, shims, bsp); simpler than threading PUBLIC/INTERFACE include
