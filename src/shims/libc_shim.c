@@ -389,6 +389,19 @@ void trap_strlcpy(cpu_t *cpu) {
     ret_u32(cpu, (uint32_t)len);
 }
 
+// ctype case mapping. The guest's newlib/picolibc has both as real functions;
+// the host's <ctype.h> usually makes them macros, so implement the C locale
+// behaviour directly: anything that is not an ASCII letter (EOF included)
+// comes back unchanged.
+void trap_tolower(cpu_t *cpu) {
+    int c = arg_i32(cpu, 0);
+    ret_u32(cpu, (uint32_t)((c >= 'A' && c <= 'Z') ? c - 'A' + 'a' : c));
+}
+void trap_toupper(cpu_t *cpu) {
+    int c = arg_i32(cpu, 0);
+    ret_u32(cpu, (uint32_t)((c >= 'a' && c <= 'z') ? c - 'a' + 'A' : c));
+}
+
 void trap_fflush(cpu_t *cpu) {
     FILE *f = handle_get(arg_u32(cpu, 0));
     ret_u32(cpu, (uint32_t)fflush(f));

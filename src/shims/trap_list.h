@@ -261,6 +261,8 @@
     X(strtoull) \
     X(__subdf3) \
     X(time) \
+    X(tolower) \
+    X(toupper) \
     X(__truncdfsf2) \
     X(__udivdi3) \
     X(ulTaskGenericNotifyTake) \
