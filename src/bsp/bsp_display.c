@@ -78,7 +78,7 @@ esp_err_t bsp_display_internal_create_window(size_t width, size_t height,
     // into the other at present time.
     s_window = SDL_CreateWindow(
         "VirtuGrace Tanmatsu emulator", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, (int)height, (int)width,
-        SDL_WINDOW_SHOWN
+        SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE
     );
     if (s_window == NULL) {
         ESP_LOGE(TAG, "SDL_CreateWindow failed: %s", SDL_GetError());
@@ -278,15 +278,18 @@ esp_err_t bsp_display_blit(size_t x, size_t y, size_t width, size_t height, cons
     }
 
     // The texture holds the raw (480x800 portrait) panel layout; rotate it
-    // 90 degrees to the window's landscape (800x480) viewing orientation --
-    // see the comment on BSP_SDL_DEFAULT_WIDTH in bsp_sdl_internal.h.
+    // 90 degrees to the window's landscape viewing orientation -- see the
+    // comment on BSP_SDL_DEFAULT_WIDTH in bsp_sdl_internal.h.
     // SDL_RenderCopyEx rotates a dstrect around its own center, so the
-    // unrotated rect has to be the *texture's* own w/h, centered in the
-    // window (which is exactly big enough for the post-rotation result
-    // since its dimensions are the texture's swapped).
+    // unrotated rect has to be sized so that, after a 90 degree turn (which
+    // swaps apparent width/height), it fills the window exactly: the
+    // *window's* height/width, not the texture's own fixed w/h -- that's
+    // what makes this stretch-scale to whatever size the (resizable)
+    // window currently is, rather than staying pinned to the panel's
+    // native resolution centered in a larger/smaller window.
     int win_w, win_h;
     SDL_GetRendererOutputSize(s_renderer, &win_w, &win_h);
-    SDL_Rect dst = {(win_w - (int)s_width) / 2, (win_h - (int)s_height) / 2, (int)s_width, (int)s_height};
+    SDL_Rect dst = {(win_w - win_h) / 2, (win_h - win_w) / 2, win_h, win_w};
 
     SDL_RenderClear(s_renderer);
     SDL_RenderCopyEx(s_renderer, s_texture, NULL, &dst, -90.0, NULL, SDL_FLIP_NONE);
