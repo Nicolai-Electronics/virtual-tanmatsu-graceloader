@@ -104,6 +104,27 @@ void trap_vTaskDelay(cpu_t *cpu) {
     }
 }
 
+void trap_xTaskDelayUntil(cpu_t *cpu) {
+    // xTaskDelayUntil(&xPreviousWakeTime, xTimeIncrement): absolute version of
+    // vTaskDelay(), so a periodic loop keeps its phase instead of drifting by
+    // however long the body took. *prev is the guest's own variable; FreeRTOS
+    // expects it to be initialised with xTaskGetTickCount() before the first
+    // call, and 0 here means "not initialised yet", in which case the target
+    // is measured from now.
+    TickType_t *prev = (TickType_t *)arg_ptr(cpu, 0);
+    TickType_t  inc  = arg_u32(cpu, 1);
+    TickType_t  now  = (TickType_t)(esp_timer_get_time() / 1000);
+    TickType_t  next = (prev != NULL && *prev != 0) ? *prev + inc : now + inc;
+    if (prev != NULL) {
+        *prev = next;
+    }
+    // Signed difference so the comparison survives the tick counter wrapping.
+    while ((int32_t)((TickType_t)(esp_timer_get_time() / 1000) - next) < 0) {
+        freertos_compat_poll_idle();
+    }
+    ret_u32(cpu, pdTRUE);
+}
+
 // ==== Tasks ===================================================================
 
 typedef struct task_ctrl {

@@ -24,6 +24,7 @@
 #include "trap.h"
 
 extern void bsp_display_internal_get_size(size_t *out_width, size_t *out_height);
+extern size_t bsp_display_internal_get_bytes_per_pixel(void);
 
 static uint32_t g_on_refresh_done_fn  = 0;  // guest function pointer, or 0 if unregistered
 static uint32_t g_on_refresh_done_ctx = 0;  // guest pointer, passed through as user_ctx
@@ -35,7 +36,9 @@ void trap_esp_lcd_dpi_panel_get_frame_buffer(cpu_t *cpu) {
 
     size_t width, height;
     bsp_display_internal_get_size(&width, &height);
-    size_t const fb_bytes = width * height * 2;  // RGB565, see bsp_display.c
+    // Sized with the negotiated panel format, which is also the format the
+    // app was told to build its drawing in -- see bsp_display.c.
+    size_t const fb_bytes = width * height * bsp_display_internal_get_bytes_per_pixel();
 
     for (uint32_t i = 0; i < fb_num && i < 3; i++) {
         void **out = (void **)arg_ptr(cpu, 2 + (int)i);

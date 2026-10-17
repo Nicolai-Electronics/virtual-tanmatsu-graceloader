@@ -80,6 +80,13 @@ void trap_bsp_led_set_mode(cpu_t *cpu) {
 void trap_bsp_led_set_pixel(cpu_t *cpu) {
     ret_u32(cpu, (uint32_t)bsp_led_set_pixel(arg_u32(cpu, 0), arg_u32(cpu, 1)));
 }
+void trap_bsp_led_write(cpu_t *cpu) {
+    // Raw WS2812-style byte stream straight to the LED strip. There is no
+    // strip here, so this goes to the bsp's "no such hardware" answer (see
+    // bsp_led_write() in src/bsp/bsp_led.c); apps that only use it for the
+    // keyboard backlight carry on regardless.
+    ret_u32(cpu, (uint32_t)bsp_led_write((uint8_t const *)arg_ptr(cpu, 0), arg_u32(cpu, 1)));
+}
 
 void trap_bsp_orientation_enable_accelerometer(cpu_t *cpu) {
     ret_u32(cpu, (uint32_t)bsp_orientation_enable_accelerometer());
@@ -100,6 +107,14 @@ void trap_bsp_orientation_get(cpu_t *cpu) {
 
 void trap_bsp_audio_get_i2s_handle(cpu_t *cpu) {
     ret_u32(cpu, (uint32_t)bsp_audio_get_i2s_handle((i2s_chan_handle_t *)arg_ptr(cpu, 0)));
+}
+void trap_bsp_audio_initialize(cpu_t *cpu) {
+    // On-device this brings up the codec and sets the pipeline rate in one
+    // go; here the rate is exactly what opening the SDL audio device needs
+    // (see bsp_audio_set_rate()'s comment in src/bsp/bsp_audio.c), and the
+    // codec itself doesn't exist. Returns void: apps declare it as
+    // `extern void bsp_audio_initialize(uint32_t rate)`.
+    bsp_audio_set_rate(arg_u32(cpu, 0));
 }
 void trap_bsp_audio_set_amplifier(cpu_t *cpu) {
     ret_u32(cpu, (uint32_t)bsp_audio_set_amplifier(arg_u32(cpu, 0) != 0));

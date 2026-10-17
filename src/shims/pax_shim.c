@@ -79,6 +79,19 @@ void trap_pax_draw_image(cpu_t *cpu) {
         (pax_buf_t *)arg_ptr(cpu, 0), (pax_buf_t const *)arg_ptr(cpu, 1), arg_f32(cpu, 0), arg_f32(cpu, 1)
     );
 }
+void trap_pax_draw_image_op(cpu_t *cpu) {
+    // Same call, "op" = treat the source as fully opaque (skip its alpha
+    // channel); the argument lists are identical.
+    pax_draw_image_op(
+        (pax_buf_t *)arg_ptr(cpu, 0), (pax_buf_t const *)arg_ptr(cpu, 1), arg_f32(cpu, 0), arg_f32(cpu, 1)
+    );
+}
+void trap_pax_draw_image_sized(cpu_t *cpu) {
+    pax_draw_image_sized(
+        (pax_buf_t *)arg_ptr(cpu, 0), (pax_buf_t const *)arg_ptr(cpu, 1), arg_f32(cpu, 0), arg_f32(cpu, 1),
+        arg_f32(cpu, 2), arg_f32(cpu, 3)
+    );
+}
 void trap_pax_simple_rect(cpu_t *cpu) {
     pax_simple_rect(
         (pax_buf_t *)arg_ptr(cpu, 0), (pax_col_t)arg_u32(cpu, 1), arg_f32(cpu, 0), arg_f32(cpu, 1), arg_f32(cpu, 2),
@@ -187,4 +200,38 @@ void trap_pax_simple_circle(cpu_t *cpu) {
     pax_simple_circle(
         (pax_buf_t *)arg_ptr(cpu, 0), (pax_col_t)arg_u32(cpu, 1), arg_f32(cpu, 0), arg_f32(cpu, 1), arg_f32(cpu, 2)
     );
+}
+void trap_pax_draw_circle(cpu_t *cpu) {
+    pax_draw_circle(
+        (pax_buf_t *)arg_ptr(cpu, 0), (pax_col_t)arg_u32(cpu, 1), arg_f32(cpu, 0), arg_f32(cpu, 1), arg_f32(cpu, 2)
+    );
+}
+
+void trap_pax_draw_text_adv(cpu_t *cpu) {
+    // pax_draw_text_adv() returns a pax_2vec2f, which is 16 bytes (x0, y0, x1,
+    // y1) -- too big for the two float return registers, so the guest ABI
+    // returns it indirectly: a0 is a hidden pointer to the caller's own return
+    // slot, and every visible argument shifts up one register (measured
+    // against riscv32-esp-elf-gcc codegen, same -march/-mabi as app.so). The
+    // caller then reads the result out of its own frame, not out of a
+    // register.
+    //
+    // That leaves room for eight visible integer arguments only, so the ninth
+    // (cursorpos) arrives in the outgoing stack area at sp+0 -- rule 3 in
+    // guest_varargs.h. Float arguments are unaffected: fa0-fa2 still carry
+    // font_size, x and y.
+    pax_2vec2f *out = (pax_2vec2f *)arg_ptr(cpu, 0);
+    uint32_t    sp  = cpu->x[2];
+    int32_t     cursorpos = 0;
+    if (sp != 0) {
+        cursorpos = *(int32_t *)(uintptr_t)sp;
+    }
+    pax_2vec2f dims = pax_draw_text_adv(
+        (pax_buf_t *)arg_ptr(cpu, 1), (pax_col_t)arg_u32(cpu, 2), (pax_font_t const *)arg_ptr(cpu, 3),
+        arg_f32(cpu, 0), arg_f32(cpu, 1), arg_f32(cpu, 2), (char const *)arg_ptr(cpu, 4), arg_u32(cpu, 5),
+        (pax_align_t)arg_i32(cpu, 6), (pax_align_t)arg_i32(cpu, 7), (ptrdiff_t)cursorpos
+    );
+    if (out != NULL) {
+        *out = dims;
+    }
 }

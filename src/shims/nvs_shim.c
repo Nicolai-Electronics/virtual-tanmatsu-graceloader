@@ -146,11 +146,23 @@ void trap_nvs_get_u16(cpu_t *cpu) {
     }
     ret_u32(cpu, (uint32_t)err);
 }
+void trap_nvs_get_i32(cpu_t *cpu) {
+    uint32_t v = 0;
+    esp_err_t err = nvs_get(arg_u32(cpu, 0), (char const *)arg_ptr(cpu, 1), &v);
+    int32_t  *out = (int32_t *)arg_ptr(cpu, 2);
+    if (err == ESP_OK && out) {
+        *out = (int32_t)v;  // the store keeps it unsigned; the sign is the caller's
+    }
+    ret_u32(cpu, (uint32_t)err);
+}
 void trap_nvs_set_u8(cpu_t *cpu) {
     ret_u32(cpu, (uint32_t)nvs_set(arg_u32(cpu, 0), (char const *)arg_ptr(cpu, 1), arg_u32(cpu, 2) & 0xFF));
 }
 void trap_nvs_set_u16(cpu_t *cpu) {
     ret_u32(cpu, (uint32_t)nvs_set(arg_u32(cpu, 0), (char const *)arg_ptr(cpu, 1), arg_u32(cpu, 2) & 0xFFFF));
+}
+void trap_nvs_set_i32(cpu_t *cpu) {
+    ret_u32(cpu, (uint32_t)nvs_set(arg_u32(cpu, 0), (char const *)arg_ptr(cpu, 1), arg_u32(cpu, 2)));
 }
 
 // String values: a separate table from the numeric g_entries above (value
