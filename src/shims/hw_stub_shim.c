@@ -71,3 +71,11 @@ void trap_gpio_install_isr_service(cpu_t *cpu) {
     (void)cpu;  // arg 0 is intr_alloc_flags, nothing here allocates an interrupt
     ret_u32(cpu, ESP_OK);
 }
+
+// MIPI DSI register access (bool mipi_dsi_hal_host_gen_read_timed_out(hal)):
+// used by the ST7701 driver to read the panel's VCOM OTP. No DSI here, so
+// "no timeout" is the answer that lets the caller fall back to its default.
+void trap_mipi_dsi_hal_host_gen_read_timed_out(cpu_t *cpu) {
+    (void)cpu;
+    ret_u32(cpu, 0);
+}

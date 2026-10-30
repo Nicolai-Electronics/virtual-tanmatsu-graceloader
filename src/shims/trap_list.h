@@ -4,6 +4,12 @@
 // tanmatsu-synthracer-grace/build/app.so, and tanmatsu-synthminer-grace/build/app.so,
 // then extended by hand with whatever the other tanmatsu-*-grace apps turn out
 // to import (see the *-build/*-run targets in the Makefile).
+//
+// The list is also kept in step with what the real graceloader actually
+// exports (../tanmatsu-graceloader/main/symbol_export/all): an app can only
+// import a symbol the real loader exports, so every API the real loader gains
+// (or loses) has to be answered here too, or the same app.so links on the
+// badge and fails to link here.
 // (A handful of data symbols -- stdout, and hardware register-block
 // externs like USB_SERIAL_JTAG -- are handled separately in
 // trap_table.c's data-symbol table, not here: they're never called,
@@ -30,8 +36,11 @@
     X(bsp_display_get_panel) \
     X(bsp_display_get_parameters) \
     X(bsp_display_get_tearing_effect_semaphore) \
+    X(bsp_display_get_vcom) \
+    X(bsp_display_get_vcom_default) \
     X(bsp_display_set_backlight_brightness) \
     X(bsp_display_set_tearing_effect_mode) \
+    X(bsp_display_set_vcom) \
     X(bsp_i2c_primary_bus_claim) \
     X(bsp_i2c_primary_bus_get_handle) \
     X(bsp_i2c_primary_bus_release) \
@@ -47,6 +56,15 @@
     X(bsp_orientation_enable_gyroscope) \
     X(bsp_orientation_get) \
     X(bsp_power_set_radio_state) \
+    X(bsp_storage_format) \
+    X(bsp_storage_get_mounted) \
+    X(bsp_storage_get_mountpoint) \
+    X(bsp_storage_get_status) \
+    X(bsp_storage_get_supported) \
+    X(bsp_storage_initialize) \
+    X(bsp_storage_mount) \
+    X(bsp_storage_mount_advanced) \
+    X(bsp_storage_unmount) \
     X(calloc) \
     X(ceil) \
     X(ceilf) \
@@ -69,13 +87,22 @@
     X(esp_h264_enc_process) \
     X(esp_intr_alloc) \
     X(esp_intr_free) \
+    X(esp_lcd_dpi_panel_disable_dma2d) \
     X(esp_lcd_dpi_panel_get_frame_buffer) \
+    X(esp_lcd_panel_del) \
     X(esp_lcd_panel_draw_bitmap) \
     X(esp_log) \
     X(esp_log_level_set) \
     X(esp_log_timestamp) \
+    X(esp_pm_lock_acquire) \
+    X(esp_pm_lock_create) \
+    X(esp_pm_lock_delete) \
+    X(esp_pm_lock_release) \
     X(esp_random) \
     X(esp_timer_get_time) \
+    X(esp_vfs_fat_sdcard_format) \
+    X(esp_vfs_fat_sdcard_format_cfg) \
+    X(esp_vfs_fat_sdcard_unmount) \
     X(exp2) \
     X(expf) \
     X(__extendsfdf2) \
@@ -83,6 +110,7 @@
     X(fastopen) \
     X(fclose) \
     X(f_closedir) \
+    X(ff_diskio_get_pdrv_cnt_card) \
     X(fflush) \
     X(fputc) \
     X(fputs) \
@@ -150,6 +178,7 @@
     X(memcpy) \
     X(memmove) \
     X(memset) \
+    X(mipi_dsi_hal_host_gen_read_timed_out) \
     X(mkdir) \
     X(__moddi3) \
     X(__muldf3) \
@@ -242,6 +271,9 @@
     X(spng_strerror) \
     X(sqrt) \
     X(sscanf) \
+    X(st7701_get_vcom) \
+    X(st7701_get_vcom_otp) \
+    X(st7701_set_vcom) \
     X(stat) \
     X(strchr) \
     X(strcmp) \

@@ -297,3 +297,31 @@ esp_err_t bsp_display_blit(size_t x, size_t y, size_t width, size_t height, cons
 
     return ESP_OK;
 }
+
+// VCOM calibration is stored on the badge in NVS and programmed into the panel
+// at init; there is no panel here, so the values are only kept, which is all
+// an app that reads them back or edits them needs. 0x2D is what the ST7701
+// init sequence ships with.
+static uint8_t s_vcom     = 0x2D;
+static uint8_t s_vcom_otp = 0x2D;
+
+esp_err_t bsp_display_get_vcom(uint8_t* out_vcom) {
+    if (out_vcom == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    *out_vcom = s_vcom;
+    return ESP_OK;
+}
+
+esp_err_t bsp_display_get_vcom_default(uint8_t* out_vcom) {
+    if (out_vcom == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    *out_vcom = s_vcom_otp;
+    return ESP_OK;
+}
+
+esp_err_t bsp_display_set_vcom(uint8_t vcom) {
+    s_vcom = vcom;
+    return ESP_OK;
+}

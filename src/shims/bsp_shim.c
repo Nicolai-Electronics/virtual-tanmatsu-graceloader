@@ -56,6 +56,28 @@ void trap_bsp_display_get_panel(cpu_t *cpu) {
     ret_u32(cpu, (uint32_t)bsp_display_get_panel((esp_lcd_panel_handle_t *)arg_ptr(cpu, 0)));
 }
 
+void trap_bsp_display_get_vcom(cpu_t *cpu) {
+    ret_u32(cpu, (uint32_t)bsp_display_get_vcom((uint8_t *)arg_ptr(cpu, 0)));
+}
+void trap_bsp_display_get_vcom_default(cpu_t *cpu) {
+    ret_u32(cpu, (uint32_t)bsp_display_get_vcom_default((uint8_t *)arg_ptr(cpu, 0)));
+}
+void trap_bsp_display_set_vcom(cpu_t *cpu) {
+    ret_u32(cpu, (uint32_t)bsp_display_set_vcom((uint8_t)arg_u32(cpu, 0)));
+}
+
+// The panel driver half of the same VCOM API; routed to the display state
+// above rather than a st7701 driver, which doesn't exist here.
+void trap_st7701_get_vcom(cpu_t *cpu) {
+    ret_u32(cpu, (uint32_t)bsp_display_get_vcom((uint8_t *)arg_ptr(cpu, 0)));
+}
+void trap_st7701_get_vcom_otp(cpu_t *cpu) {
+    ret_u32(cpu, (uint32_t)bsp_display_get_vcom_default((uint8_t *)arg_ptr(cpu, 0)));
+}
+void trap_st7701_set_vcom(cpu_t *cpu) {
+    ret_u32(cpu, (uint32_t)bsp_display_set_vcom((uint8_t)arg_u32(cpu, 0)));
+}
+
 void trap_bsp_input_set_backlight_brightness(cpu_t *cpu) {
     ret_u32(cpu, (uint32_t)bsp_input_set_backlight_brightness((uint8_t)arg_u32(cpu, 0)));
 }
