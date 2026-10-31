@@ -17,6 +17,8 @@
 #define TRAP_LIST(X) \
     X(__adddf3) \
     X(adler32) \
+    X(acos) \
+    X(asin) \
     X(asinf) \
     X(atan2) \
     X(atan2f) \
@@ -70,6 +72,7 @@
     X(ceilf) \
     X(cos) \
     X(cosf) \
+    X(cosh) \
     X(crc32) \
     X(difftime) \
     X(__divdf3) \
@@ -173,6 +176,7 @@
     X(localtime_r) \
     X(log) \
     X(log10) \
+    X(logf) \
     X(lrintf) \
     X(lroundf) \
     X(__ltdf2) \
@@ -264,6 +268,7 @@
     X(roundf) \
     X(sin) \
     X(sinf) \
+    X(sinh) \
     X(sprintf) \
     X(snprintf) \
     X(spng_ctx_free) \

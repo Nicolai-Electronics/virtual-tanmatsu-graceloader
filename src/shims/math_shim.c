@@ -72,6 +72,9 @@ void trap_fmod(cpu_t *cpu) {
 void trap_log(cpu_t *cpu) {
     ret_f64(cpu, log(arg_f64(cpu, 0)));
 }
+void trap_logf(cpu_t *cpu) {
+    ret_f32(cpu, logf(arg_f32(cpu, 0)));
+}
 void trap_log10(cpu_t *cpu) {
     ret_f64(cpu, log10(arg_f64(cpu, 0)));
 }
@@ -80,6 +83,18 @@ void trap_exp2(cpu_t *cpu) {
 }
 void trap_atan2(cpu_t *cpu) {
     ret_f64(cpu, atan2(arg_f64(cpu, 0), arg_f64(cpu, 2)));
+}
+void trap_asin(cpu_t *cpu) {
+    ret_f64(cpu, asin(arg_f64(cpu, 0)));
+}
+void trap_acos(cpu_t *cpu) {
+    ret_f64(cpu, acos(arg_f64(cpu, 0)));
+}
+void trap_sinh(cpu_t *cpu) {
+    ret_f64(cpu, sinh(arg_f64(cpu, 0)));
+}
+void trap_cosh(cpu_t *cpu) {
+    ret_f64(cpu, cosh(arg_f64(cpu, 0)));
 }
 void trap_pow(cpu_t *cpu) {
     ret_f64(cpu, pow(arg_f64(cpu, 0), arg_f64(cpu, 2)));
