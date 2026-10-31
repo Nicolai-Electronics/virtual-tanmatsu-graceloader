@@ -20,7 +20,7 @@
 #
 #   make synthracer-build IDF_TOOLS_PATH=~/idf/tools-6.0
 
-APPS := synthminer synthracer portals showreel pogn paperclips floppybird ballz musicalkeyboard
+APPS := synthminer synthracer portals showreel pogn paperclips floppybird ballz musicalkeyboard nisp
 
 APP_DIR_synthminer      := ../tanmatsu-synthminer-grace
 APP_DIR_synthracer      := ../tanmatsu-synthracer-grace
@@ -31,6 +31,7 @@ APP_DIR_paperclips      := ../tanmatsu-paperclips-grace
 APP_DIR_floppybird      := ../tanmatsu-floppybird-grace
 APP_DIR_ballz           := ../tanmatsu-ballz-grace
 APP_DIR_musicalkeyboard := ../tanmatsu-musicalkeyboard-grace
+APP_DIR_nisp            := ../tanmatsu-nisp-grace
 APP_DIRS                := $(foreach name,$(APPS),$(APP_DIR_$(name)))
 
 # Which app `make run` starts.

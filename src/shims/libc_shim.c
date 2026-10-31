@@ -312,6 +312,27 @@ void trap_calloc(cpu_t *cpu) {
     // trap_heap_caps_malloc() in esp_shim.c.
     ret_ptr(cpu, guest_mem_calloc((size_t)arg_u32(cpu, 0) * arg_u32(cpu, 1), 8));
 }
+
+void trap_strftime(cpu_t *cpu) {
+    // The guest's struct tm is the 36-byte picolibc one (see guest_tm_t
+    // above); glibc's has two extra fields, so the fields are copied across
+    // rather than the struct reinterpreted.
+    char             *out  = (char *)arg_ptr(cpu, 0);
+    size_t const      max  = (size_t)arg_u32(cpu, 1);
+    char const       *fmt  = (char const *)arg_ptr(cpu, 2);
+    guest_tm_t const *gtm  = (guest_tm_t const *)arg_ptr(cpu, 3);
+    struct tm         host = {0};
+    host.tm_sec   = gtm->tm_sec;
+    host.tm_min   = gtm->tm_min;
+    host.tm_hour  = gtm->tm_hour;
+    host.tm_mday  = gtm->tm_mday;
+    host.tm_mon   = gtm->tm_mon;
+    host.tm_year  = gtm->tm_year;
+    host.tm_wday  = gtm->tm_wday;
+    host.tm_yday  = gtm->tm_yday;
+    host.tm_isdst = gtm->tm_isdst;
+    ret_u32(cpu, (uint32_t)strftime(out, max, fmt, &host));
+}
 void trap_free(cpu_t *cpu) {
     guest_mem_free(arg_ptr(cpu, 0));
 }

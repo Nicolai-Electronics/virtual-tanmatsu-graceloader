@@ -82,9 +82,13 @@
     X(esp_err_to_name) \
     X(esp_h264_enc_close) \
     X(esp_h264_enc_del) \
+    X(esp_h264_enc_hw_get_param_hd) \
     X(esp_h264_enc_hw_new) \
     X(esp_h264_enc_open) \
     X(esp_h264_enc_process) \
+    X(esp_h264_enc_set_bitrate) \
+    X(esp_h264_enc_set_fps) \
+    X(esp_h264_enc_set_gop) \
     X(esp_intr_alloc) \
     X(esp_intr_free) \
     X(esp_lcd_dpi_panel_disable_dma2d) \
@@ -222,6 +226,7 @@
     X(pax_buf_reversed) \
     X(pax_buf_set_orientation) \
     X(pax_buf_type_info) \
+    X(pax_decode_png_fd) \
     X(pax_draw_circle) \
     X(pax_draw_image) \
     X(pax_draw_image_op) \
@@ -279,6 +284,7 @@
     X(strcmp) \
     X(strcpy) \
     X(strcspn) \
+    X(strftime) \
     X(strlcat) \
     X(strlcpy) \
     X(strlen) \

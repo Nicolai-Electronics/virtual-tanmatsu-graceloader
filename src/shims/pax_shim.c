@@ -166,6 +166,17 @@ void trap_pax_insert_png_fd(cpu_t *cpu) {
     );
 }
 
+void trap_pax_decode_png_fd(cpu_t *cpu) {
+    // Same handle_table translation as above: the guest's FILE* is an index.
+    FILE *fd = (FILE *)handle_get(arg_u32(cpu, 1));
+    ret_u32(
+        cpu,
+        (uint32_t)pax_decode_png_fd(
+            (pax_buf_t *)arg_ptr(cpu, 0), fd, (pax_buf_type_t)arg_i32(cpu, 2), arg_i32(cpu, 3)
+        )
+    );
+}
+
 void trap_pax_buf_get_type(cpu_t *cpu) {
     ret_u32(cpu, (uint32_t)pax_buf_get_type((pax_buf_t const *)arg_ptr(cpu, 0)));
 }
