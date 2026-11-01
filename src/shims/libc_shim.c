@@ -4,6 +4,9 @@
 // they aren't guaranteed to fit in a 32-bit guest register.
 
 #include <errno.h>
+// Host <dirent.h> is glibc's; the guest's is picolibc's and laid out
+// differently -- see guest_dirent_t below.
+#include <dirent.h>
 #include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -207,19 +210,47 @@ typedef struct {
 } guest_stat_t;
 _Static_assert(sizeof(guest_stat_t) == 88, "guest_stat_t must match picolibc's struct stat exactly");
 
+static void fill_guest_stat(guest_stat_t *gst, struct stat const *st) {
+    memset(gst, 0, sizeof(*gst));
+    gst->st_mode      = st->st_mode;
+    gst->st_nlink     = (int16_t)st->st_nlink;
+    gst->st_size      = st->st_size;
+    // All three timestamps, not just mtime: st_ctim is as close to a
+    // "creation time" as either side gets (Linux's struct stat has no birth
+    // time, and the device's FatFs reports a file's creation date in its
+    // ctime slot), and an app that lists a directory shows one of them.
+    gst->st_atim_sec  = st->st_atime;
+    gst->st_atim_nsec = (int32_t)st->st_atim.tv_nsec;
+    gst->st_mtim_sec  = st->st_mtime;
+    gst->st_mtim_nsec = (int32_t)st->st_mtim.tv_nsec;
+    gst->st_ctim_sec  = st->st_ctime;
+    gst->st_ctim_nsec = (int32_t)st->st_ctim.tv_nsec;
+    gst->st_blksize   = (int32_t)st->st_blksize;
+    gst->st_blocks    = (int32_t)st->st_blocks;
+}
+
 void trap_stat(cpu_t *cpu) {
     char        buf[1024];
     char const *path = fsroot_translate((char const *)arg_ptr(cpu, 0), buf, sizeof(buf));
     struct stat st;
     int         rc = stat(path, &st);
     if (rc == 0) {
-        guest_stat_t gst = {0};
-        gst.st_mode      = st.st_mode;
-        gst.st_nlink     = (int16_t)st.st_nlink;
-        gst.st_size       = st.st_size;
-        gst.st_mtim_sec   = st.st_mtime;
-        gst.st_blksize    = (int32_t)st.st_blksize;
-        gst.st_blocks     = (int32_t)st.st_blocks;
+        guest_stat_t gst;
+        fill_guest_stat(&gst, &st);
+        memcpy(arg_ptr(cpu, 1), &gst, sizeof(gst));
+    }
+    ret_u32(cpu, (uint32_t)rc);
+}
+// fstat() is the same struct, filled the same way, from an fd instead of a
+// path. There is no fd indirection table here the way there is for FILE*
+// (see handle_table.h): an fd is a small integer, so the number the guest
+// holds is the host's own fd.
+void trap_fstat(cpu_t *cpu) {
+    struct stat st;
+    int         rc = fstat(arg_i32(cpu, 0), &st);
+    if (rc == 0) {
+        guest_stat_t gst;
+        fill_guest_stat(&gst, &st);
         memcpy(arg_ptr(cpu, 1), &gst, sizeof(gst));
     }
     ret_u32(cpu, (uint32_t)rc);
@@ -521,4 +552,179 @@ void trap_f_unlink(cpu_t *cpu) {
     char        buf[1024];
     char const *path = fsroot_translate((char const *)arg_ptr(cpu, 0), buf, sizeof(buf));
     ret_u32(cpu, remove(path) == 0 ? 0 : 4 /* FR_NO_FILE (approximated) */);
+}
+
+// Directory walking and file renaming/deleting, i.e. the POSIX half of the
+// VFS API: opendir/readdir/readdir_r/closedir, rename, unlink, remove,
+// access. The real loader answers these with esp_vfs_opendir() & co. (IDF's
+// components/vfs/vfs_calls.c), which for /int and /sd end up in its FatFs
+// and littlefs VFS shims; here they go straight to the host's own calls, on
+// the directories fsroot_translate() maps those two mount points onto.
+
+// app.so's `struct dirent` is picolibc's, not glibc's: ino_t is 16 bits,
+// there is no d_off/d_reclen, and d_name is 256 bytes -- 260 bytes (d_ino at
+// 0, d_type at 2, d_name at 3) against the 268 this -m32 emulator's own
+// glibc has, with different offsets throughout. Verified the same way as
+// guest_stat_t above: compiled a probe with the real riscv32-esp-elf-gcc and
+// read sizeof()/offsetof() back out of the object file's symbol table.
+typedef struct {
+    uint16_t d_ino;
+    uint8_t  d_type;
+    char     d_name[256];
+} guest_dirent_t;
+_Static_assert(sizeof(guest_dirent_t) == 260, "guest_dirent_t must match picolibc's struct dirent exactly");
+
+// The guest's DT_* values are picolibc's (DT_UNKNOWN 0, DT_REG 1, DT_DIR 2),
+// not glibc's (DT_UNKNOWN 0, DT_REG 8, DT_DIR 4), so they get their own names
+// here instead of the <dirent.h> macros.
+#define GUEST_DT_UNKNOWN 0
+#define GUEST_DT_REG     1
+#define GUEST_DT_DIR     2
+
+// The guest's DIR is 4 bytes of VFS bookkeeping whose contents belong to
+// whichever VFS implementation served opendir(); apps never read through it,
+// they only hand it back to readdir()/closedir(). So this emulator hands back
+// a pointer to a guest-memory block of its own, exactly like the real
+// implementations do (they allocate a DIR large enough for their private
+// state and return that). It has to be guest memory rather than the host
+// heap because readdir() hands back a pointer *into* it, and guest registers
+// are 32 bits wide (see guest_mem.h).
+typedef struct {
+    DIR           *host_dir;
+    char           path[1024];  // the directory being read, for the d_type fallback below
+    guest_dirent_t ent;         // readdir()'s result, stable until the next readdir()/closedir()
+} guest_dir_t;
+
+// The next entry of `gd`, skipping "." and ".." the way the device's FatFs
+// and littlefs volumes never offer them in the first place. Returns NULL at
+// end of directory, which is the end-of-directory marker the guest's
+// readdir() callers expect; readdir() leaves errno alone there, so a caller
+// that checks trap___errno() sees no error.
+static struct dirent *next_host_entry(guest_dir_t *gd) {
+    struct dirent *ent;
+    while ((ent = readdir(gd->host_dir)) != NULL) {
+        if (strcmp(ent->d_name, ".") != 0 && strcmp(ent->d_name, "..") != 0) {
+            return ent;
+        }
+    }
+    return NULL;
+}
+
+static void fill_guest_dirent(guest_dirent_t *dst, struct dirent const *src, char const *dir_path) {
+    memset(dst, 0, sizeof(*dst));
+    dst->d_ino = (uint16_t)src->d_ino;  // the guest's ino_t is 16 bits, so this is a truncation
+    dst->d_type = GUEST_DT_UNKNOWN;
+    if (src->d_type == DT_DIR) {
+        dst->d_type = GUEST_DT_DIR;
+    } else if (src->d_type == DT_REG) {
+        dst->d_type = GUEST_DT_REG;
+    } else {
+        // Some host filesystems report DT_UNKNOWN for everything, and a
+        // symlink is DT_LNK, which the guest has no value for at all. Ask
+        // the host what it actually is rather than give up.
+        char        full[1200];
+        snprintf(full, sizeof(full), "%s/%s", dir_path, src->d_name);
+        struct stat st;
+        if (stat(full, &st) == 0) {
+            if (S_ISDIR(st.st_mode)) {
+                dst->d_type = GUEST_DT_DIR;
+            } else if (S_ISREG(st.st_mode)) {
+                dst->d_type = GUEST_DT_REG;
+            }
+        }
+    }
+    snprintf(dst->d_name, sizeof(dst->d_name), "%s", src->d_name);
+}
+
+void trap_opendir(cpu_t *cpu) {
+    char        buf[1024];
+    char const *path = fsroot_translate((char const *)arg_ptr(cpu, 0), buf, sizeof(buf));
+    DIR        *d    = opendir(path);
+    if (d == NULL) {
+        ret_u32(cpu, 0);  // NULL; the host's errno reaches the guest through trap___errno()
+        return;
+    }
+    guest_dir_t *gd = (guest_dir_t *)guest_mem_calloc(sizeof(guest_dir_t), _Alignof(guest_dir_t));
+    gd->host_dir = d;
+    snprintf(gd->path, sizeof(gd->path), "%s", path);
+    ret_ptr(cpu, gd);
+}
+void trap_readdir(cpu_t *cpu) {
+    guest_dir_t *gd = (guest_dir_t *)arg_ptr(cpu, 0);
+    if (gd == NULL || gd->host_dir == NULL) {
+        errno = EBADF;
+        ret_u32(cpu, 0);
+        return;
+    }
+    struct dirent *ent = next_host_entry(gd);
+    if (ent == NULL) {
+        ret_u32(cpu, 0);  // NULL end-of-directory marker
+        return;
+    }
+    fill_guest_dirent(&gd->ent, ent, gd->path);
+    ret_ptr(cpu, &gd->ent);  // valid until the next readdir()/closedir(), as on the device
+}
+void trap_readdir_r(cpu_t *cpu) {
+    guest_dir_t     *gd  = (guest_dir_t *)arg_ptr(cpu, 0);
+    guest_dirent_t  *out = (guest_dirent_t *)arg_ptr(cpu, 1);
+    guest_dirent_t **res = (guest_dirent_t **)arg_ptr(cpu, 2);
+    if (gd == NULL || gd->host_dir == NULL || out == NULL) {
+        errno = EBADF;
+        ret_u32(cpu, (uint32_t)(int32_t)-1);
+        return;
+    }
+    struct dirent *ent = next_host_entry(gd);
+    if (ent == NULL) {
+        if (res != NULL) {
+            *res = NULL;  // end of directory, reported through *out_dirent rather than the return value
+        }
+        ret_u32(cpu, 0);
+        return;
+    }
+    fill_guest_dirent(out, ent, gd->path);
+    if (res != NULL) {
+        *res = out;
+    }
+    ret_u32(cpu, 0);
+}
+void trap_closedir(cpu_t *cpu) {
+    guest_dir_t *gd = (guest_dir_t *)arg_ptr(cpu, 0);
+    if (gd == NULL || gd->host_dir == NULL) {
+        errno = EBADF;
+        ret_u32(cpu, (uint32_t)(int32_t)-1);
+        return;
+    }
+    int rc = closedir(gd->host_dir);
+    gd->host_dir = NULL;
+    guest_mem_free(gd);
+    ret_u32(cpu, (uint32_t)rc);
+}
+
+// rename/unlink/remove/access return the host's own value, -1 rather than a
+// FatFs FRESULT, so the host errno reaches the guest through trap___errno()
+// exactly as esp_vfs_rename() & co. pass theirs through on the device.
+void trap_rename(cpu_t *cpu) {
+    char bufa[1024], bufb[1024];
+    char const *a = fsroot_translate((char const *)arg_ptr(cpu, 0), bufa, sizeof(bufa));
+    char const *b = fsroot_translate((char const *)arg_ptr(cpu, 1), bufb, sizeof(bufb));
+    ret_u32(cpu, (uint32_t)(int32_t)rename(a, b));
+}
+void trap_unlink(cpu_t *cpu) {
+    char        buf[1024];
+    char const *path = fsroot_translate((char const *)arg_ptr(cpu, 0), buf, sizeof(buf));
+    ret_u32(cpu, (uint32_t)(int32_t)unlink(path));
+}
+void trap_remove(cpu_t *cpu) {
+    // There is no esp_vfs_remove(): the `remove` the loader exports is
+    // picolibc's own, which tries unlink() and falls back to rmdir() -- both
+    // of which land in the VFS entry points above. The host's remove() does
+    // exactly the same, so it is the right thing to call here.
+    char        buf[1024];
+    char const *path = fsroot_translate((char const *)arg_ptr(cpu, 0), buf, sizeof(buf));
+    ret_u32(cpu, (uint32_t)(int32_t)remove(path));
+}
+void trap_access(cpu_t *cpu) {
+    char        buf[1024];
+    char const *path = fsroot_translate((char const *)arg_ptr(cpu, 0), buf, sizeof(buf));
+    ret_u32(cpu, (uint32_t)(int32_t)access(path, arg_i32(cpu, 1)));
 }

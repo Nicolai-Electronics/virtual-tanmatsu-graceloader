@@ -31,7 +31,7 @@ symbols become trampolines in a reserved range above the guest heap.
 
 **Host APIs are traps.** `app.so` has an undefined symbol for everything it
 calls outside itself: ESP-IDF, the Tanmatsu BSP, pax-gfx, libc.
-`src/shims/trap_list.h` lists all of them (284 entries) and
+`src/shims/trap_list.h` lists all of them (332 entries) and
 `src/shims/trap_table.c` maps each to a C function in `src/shims/` and
 `src/bsp/`. That is the whole boundary between the app and this machine, and
 almost all of this emulator's behaviour lives there.
@@ -105,8 +105,9 @@ build/graceloader-emulator [--int DIR] [--sd DIR] [--card DIR] <guest path to ap
 ## The virtual card
 
 The emulator exports two host directories, `int/` and `sd/`, as the app's
-`/int` and `/sd`. FatFs calls go straight to host `opendir`/`readdir`/`fopen`, so
-an app can write a save file and you can look at it with `cat`.
+`/int` and `/sd`. Both the FatFs calls (`f_opendir`/`f_readdir`/`fopen`) and the
+POSIX VFS ones (`opendir`/`readdir`/`rename`/`unlink`/`stat`) go straight to the
+host's own, so an app can write a save file and you can look at it with `cat`.
 
 An app finds its own assets by appending to
 `graceloader_get_install_basepath()`, which the real graceloader sets to the

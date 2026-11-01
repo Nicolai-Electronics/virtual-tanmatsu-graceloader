@@ -16,6 +16,7 @@
 // only dereferenced as plain memory.)
 #define TRAP_LIST(X) \
     X(__adddf3) \
+    X(access) \
     X(adler32) \
     X(acos) \
     X(asin) \
@@ -70,6 +71,7 @@
     X(calloc) \
     X(ceil) \
     X(ceilf) \
+    X(closedir) \
     X(cos) \
     X(cosf) \
     X(cosh) \
@@ -141,6 +143,7 @@
     X(free) \
     X(f_rename) \
     X(fseek) \
+    X(fstat) \
     X(ftell) \
     X(f_unlink) \
     X(fwrite) \
@@ -215,6 +218,7 @@
     X(nvs_set_str) \
     X(nvs_set_u16) \
     X(nvs_set_u8) \
+    X(opendir) \
     X(pax_background) \
     X(pax_buf_destroy) \
     X(pax_buf_get_height) \
@@ -262,7 +266,11 @@
     X(puts) \
     X(qsort) \
     X(rand) \
+    X(readdir) \
+    X(readdir_r) \
     X(realloc) \
+    X(remove) \
+    X(rename) \
     X(rmdir) \
     X(round) \
     X(roundf) \
@@ -309,6 +317,7 @@
     X(__truncdfsf2) \
     X(__udivdi3) \
     X(ulTaskGenericNotifyTake) \
+    X(unlink) \
     X(__umoddi3) \
     X(__unorddf2) \
     X(usb_del_phy) \
