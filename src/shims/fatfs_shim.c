@@ -21,6 +21,7 @@
 #include <sys/stat.h>
 
 #include "cpu.h"
+#include "esp_err.h"
 #include "fsroot.h"
 #include "trap.h"
 
@@ -130,4 +131,26 @@ void trap_f_closedir(cpu_t *cpu) {
         g_dirs[slot].key = NULL;
     }
     ret_u32(cpu, 0);  // FR_OK
+}
+
+// The sdmmc-backed FatFs entry points, exported by the real loader because its
+// BSP uses them. No app can have a mounted card here (/sd is a host directory
+// the loader already owns), so these answer exactly what IDF answers for a
+// card that isn't mounted -- in particular format() never touches the host
+// directory behind /sd.
+void trap_esp_vfs_fat_sdcard_unmount(cpu_t *cpu) {
+    (void)cpu;
+    ret_u32(cpu, ESP_ERR_INVALID_ARG);
+}
+void trap_esp_vfs_fat_sdcard_format(cpu_t *cpu) {
+    (void)cpu;
+    ret_u32(cpu, ESP_ERR_INVALID_STATE);
+}
+void trap_esp_vfs_fat_sdcard_format_cfg(cpu_t *cpu) {
+    (void)cpu;
+    ret_u32(cpu, ESP_ERR_INVALID_STATE);
+}
+void trap_ff_diskio_get_pdrv_cnt_card(cpu_t *cpu) {
+    (void)cpu;
+    ret_u32(cpu, 0);  // no volume registered for this card
 }

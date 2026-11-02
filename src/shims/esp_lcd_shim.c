@@ -78,3 +78,14 @@ void trap_graceloader_display_register_callbacks(cpu_t *cpu) {
     g_on_refresh_done_ctx = arg_u32(cpu, 1);
     ret_u32(cpu, ESP_OK);
 }
+
+// Panel teardown: this backend's one SDL texture outlives every app, so
+// deleting a panel is a no-op rather than actually freeing anything.
+void trap_esp_lcd_panel_del(cpu_t *cpu) {
+    (void)cpu;
+    ret_u32(cpu, ESP_OK);
+}
+void trap_esp_lcd_dpi_panel_disable_dma2d(cpu_t *cpu) {
+    (void)cpu;
+    ret_u32(cpu, ESP_OK);
+}

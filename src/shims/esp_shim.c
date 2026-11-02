@@ -135,3 +135,30 @@ void trap_esp_intr_free(cpu_t *cpu) {
     (void)cpu;
     ret_u32(cpu, ESP_OK);
 }
+
+// Power management locks: nothing here has a power state to keep awake, so a
+// lock is a sentinel handle that always succeeds. Apps and BSP init paths
+// ESP_ERROR_CHECK() these, so failing them would abort them before the menu.
+static int s_pm_lock_stub;
+
+void trap_esp_pm_lock_create(cpu_t *cpu) {
+    void **out = (void **)arg_ptr(cpu, 3);  // (pm_type, arg, name, &handle)
+    if (out == NULL) {
+        ret_u32(cpu, ESP_ERR_INVALID_ARG);
+        return;
+    }
+    *out = &s_pm_lock_stub;
+    ret_u32(cpu, ESP_OK);
+}
+void trap_esp_pm_lock_acquire(cpu_t *cpu) {
+    (void)cpu;
+    ret_u32(cpu, ESP_OK);
+}
+void trap_esp_pm_lock_release(cpu_t *cpu) {
+    (void)cpu;
+    ret_u32(cpu, ESP_OK);
+}
+void trap_esp_pm_lock_delete(cpu_t *cpu) {
+    (void)cpu;
+    ret_u32(cpu, ESP_OK);
+}

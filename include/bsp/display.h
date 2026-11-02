@@ -106,3 +106,15 @@ esp_err_t bsp_display_get_tearing_effect_semaphore(SemaphoreHandle_t* semaphore)
 /// @brief Send pixel data to the display
 /// @return ESP-IDF error code
 esp_err_t bsp_display_blit(size_t x, size_t y, size_t width, size_t height, const void* buffer);
+
+/// @brief Read the current LCD common voltage calibration value
+/// @return ESP-IDF error code
+esp_err_t bsp_display_get_vcom(uint8_t* out_vcom);
+
+/// @brief Read the default LCD common voltage calibration value
+/// @return ESP-IDF error code
+esp_err_t bsp_display_get_vcom_default(uint8_t* out_vcom);
+
+/// @brief Write the LCD common voltage calibration value
+/// @return ESP-IDF error code
+esp_err_t bsp_display_set_vcom(uint8_t vcom);

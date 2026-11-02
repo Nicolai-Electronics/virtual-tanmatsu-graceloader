@@ -152,6 +152,8 @@ add_library(emu_shims STATIC
     src/shims/nvs_shim.c
     src/shims/fatfs_shim.c
     src/shims/bsp_shim.c
+    src/shims/console_shim.c
+    src/shims/storage_shim.c
     src/shims/i2c_i2s_shim.c
     src/shims/ppa_shim.c
     src/shims/pax_shim.c

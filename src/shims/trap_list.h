@@ -4,13 +4,22 @@
 // tanmatsu-synthracer-grace/build/app.so, and tanmatsu-synthminer-grace/build/app.so,
 // then extended by hand with whatever the other tanmatsu-*-grace apps turn out
 // to import (see the *-build/*-run targets in the Makefile).
+//
+// The list is also kept in step with what the real graceloader actually
+// exports (../tanmatsu-graceloader/main/symbol_export/all): an app can only
+// import a symbol the real loader exports, so every API the real loader gains
+// (or loses) has to be answered here too, or the same app.so links on the
+// badge and fails to link here.
 // (A handful of data symbols -- stdout, and hardware register-block
 // externs like USB_SERIAL_JTAG -- are handled separately in
 // trap_table.c's data-symbol table, not here: they're never called,
 // only dereferenced as plain memory.)
 #define TRAP_LIST(X) \
     X(__adddf3) \
+    X(access) \
     X(adler32) \
+    X(acos) \
+    X(asin) \
     X(asinf) \
     X(atan2) \
     X(atan2f) \
@@ -30,8 +39,11 @@
     X(bsp_display_get_panel) \
     X(bsp_display_get_parameters) \
     X(bsp_display_get_tearing_effect_semaphore) \
+    X(bsp_display_get_vcom) \
+    X(bsp_display_get_vcom_default) \
     X(bsp_display_set_backlight_brightness) \
     X(bsp_display_set_tearing_effect_mode) \
+    X(bsp_display_set_vcom) \
     X(bsp_i2c_primary_bus_claim) \
     X(bsp_i2c_primary_bus_get_handle) \
     X(bsp_i2c_primary_bus_release) \
@@ -47,11 +59,22 @@
     X(bsp_orientation_enable_gyroscope) \
     X(bsp_orientation_get) \
     X(bsp_power_set_radio_state) \
+    X(bsp_storage_format) \
+    X(bsp_storage_get_mounted) \
+    X(bsp_storage_get_mountpoint) \
+    X(bsp_storage_get_status) \
+    X(bsp_storage_get_supported) \
+    X(bsp_storage_initialize) \
+    X(bsp_storage_mount) \
+    X(bsp_storage_mount_advanced) \
+    X(bsp_storage_unmount) \
     X(calloc) \
     X(ceil) \
     X(ceilf) \
+    X(closedir) \
     X(cos) \
     X(cosf) \
+    X(cosh) \
     X(crc32) \
     X(difftime) \
     X(__divdf3) \
@@ -64,18 +87,31 @@
     X(esp_err_to_name) \
     X(esp_h264_enc_close) \
     X(esp_h264_enc_del) \
+    X(esp_h264_enc_hw_get_param_hd) \
     X(esp_h264_enc_hw_new) \
     X(esp_h264_enc_open) \
     X(esp_h264_enc_process) \
+    X(esp_h264_enc_set_bitrate) \
+    X(esp_h264_enc_set_fps) \
+    X(esp_h264_enc_set_gop) \
     X(esp_intr_alloc) \
     X(esp_intr_free) \
+    X(esp_lcd_dpi_panel_disable_dma2d) \
     X(esp_lcd_dpi_panel_get_frame_buffer) \
+    X(esp_lcd_panel_del) \
     X(esp_lcd_panel_draw_bitmap) \
     X(esp_log) \
     X(esp_log_level_set) \
     X(esp_log_timestamp) \
+    X(esp_pm_lock_acquire) \
+    X(esp_pm_lock_create) \
+    X(esp_pm_lock_delete) \
+    X(esp_pm_lock_release) \
     X(esp_random) \
     X(esp_timer_get_time) \
+    X(esp_vfs_fat_sdcard_format) \
+    X(esp_vfs_fat_sdcard_format_cfg) \
+    X(esp_vfs_fat_sdcard_unmount) \
     X(exp2) \
     X(expf) \
     X(__extendsfdf2) \
@@ -83,6 +119,7 @@
     X(fastopen) \
     X(fclose) \
     X(f_closedir) \
+    X(ff_diskio_get_pdrv_cnt_card) \
     X(fflush) \
     X(fputc) \
     X(fputs) \
@@ -106,6 +143,7 @@
     X(free) \
     X(f_rename) \
     X(fseek) \
+    X(fstat) \
     X(ftell) \
     X(f_unlink) \
     X(fwrite) \
@@ -141,6 +179,7 @@
     X(localtime_r) \
     X(log) \
     X(log10) \
+    X(logf) \
     X(lrintf) \
     X(lroundf) \
     X(__ltdf2) \
@@ -150,6 +189,7 @@
     X(memcpy) \
     X(memmove) \
     X(memset) \
+    X(mipi_dsi_hal_host_gen_read_timed_out) \
     X(mkdir) \
     X(__moddi3) \
     X(__muldf3) \
@@ -178,6 +218,7 @@
     X(nvs_set_str) \
     X(nvs_set_u16) \
     X(nvs_set_u8) \
+    X(opendir) \
     X(pax_background) \
     X(pax_buf_destroy) \
     X(pax_buf_get_height) \
@@ -193,6 +234,7 @@
     X(pax_buf_reversed) \
     X(pax_buf_set_orientation) \
     X(pax_buf_type_info) \
+    X(pax_decode_png_fd) \
     X(pax_draw_circle) \
     X(pax_draw_image) \
     X(pax_draw_image_op) \
@@ -224,12 +266,17 @@
     X(puts) \
     X(qsort) \
     X(rand) \
+    X(readdir) \
+    X(readdir_r) \
     X(realloc) \
+    X(remove) \
+    X(rename) \
     X(rmdir) \
     X(round) \
     X(roundf) \
     X(sin) \
     X(sinf) \
+    X(sinh) \
     X(sprintf) \
     X(snprintf) \
     X(spng_ctx_free) \
@@ -242,11 +289,15 @@
     X(spng_strerror) \
     X(sqrt) \
     X(sscanf) \
+    X(st7701_get_vcom) \
+    X(st7701_get_vcom_otp) \
+    X(st7701_set_vcom) \
     X(stat) \
     X(strchr) \
     X(strcmp) \
     X(strcpy) \
     X(strcspn) \
+    X(strftime) \
     X(strlcat) \
     X(strlcpy) \
     X(strlen) \
@@ -266,6 +317,7 @@
     X(__truncdfsf2) \
     X(__udivdi3) \
     X(ulTaskGenericNotifyTake) \
+    X(unlink) \
     X(__umoddi3) \
     X(__unorddf2) \
     X(usb_del_phy) \
